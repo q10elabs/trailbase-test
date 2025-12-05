@@ -1,0 +1,28 @@
+# Auto-generated config.Config textproto
+email {}
+server {
+  application_name: "TrailBase"
+  site_url: "http://localhost:7000"
+  logs_retention_sec: 604800
+}
+auth {
+  auth_token_ttl_sec: 3600
+  refresh_token_ttl_sec: 2592000
+  oauth_providers: [{
+    key: "google"
+    value {
+      client_id: "{{GOOGLE_OAUTH_CLIENT_ID}}"
+      client_secret: "{{GOOGLE_OAUTH_CLIENT_SECRET}}"
+      provider_id: GOOGLE
+    }
+  }]
+}
+jobs {}
+record_apis: [{
+  name: "counters"
+  table_name: "user_counters"
+  acl_authenticated: [READ, UPDATE, CREATE]
+  create_access_rule: "_REQ_.user = _USER_.id"
+  read_access_rule: "_ROW_.user = _USER_.id"
+  update_access_rule: "_ROW_.user = _USER_.id"
+}]

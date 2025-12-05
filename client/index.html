@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TrailBase Counter Experiment</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+
+      .container {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        padding: 40px;
+        max-width: 500px;
+        width: 100%;
+      }
+
+      h1 {
+        color: #333;
+        margin-bottom: 30px;
+        text-align: center;
+      }
+
+      .auth-section {
+        margin-bottom: 30px;
+      }
+
+      .counter-section {
+        text-align: center;
+      }
+
+      .counter-display {
+        font-size: 72px;
+        font-weight: bold;
+        color: #667eea;
+        margin: 30px 0;
+        min-height: 100px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      button {
+        background: #667eea;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        font-size: 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background 0.2s;
+        width: 100%;
+        margin: 5px 0;
+      }
+
+      button:hover {
+        background: #5568d3;
+      }
+
+      button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+      }
+
+      .increment-btn {
+        background: #48bb78;
+        font-size: 20px;
+        padding: 16px 32px;
+        margin-top: 20px;
+      }
+
+      .increment-btn:hover {
+        background: #38a169;
+      }
+
+      input {
+        width: 100%;
+        padding: 12px;
+        margin: 5px 0;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 16px;
+      }
+
+      .error {
+        color: #e53e3e;
+        margin: 10px 0;
+        padding: 10px;
+        background: #fed7d7;
+        border-radius: 6px;
+        display: none;
+      }
+
+      .error.show {
+        display: block;
+      }
+
+      .user-info {
+        margin-bottom: 20px;
+        padding: 15px;
+        background: #f7fafc;
+        border-radius: 6px;
+        text-align: center;
+      }
+
+      .oauth-buttons {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
+      }
+
+      .oauth-buttons button {
+        flex: 1;
+        background: #4285f4;
+      }
+
+      .oauth-buttons button:hover {
+        background: #357ae8;
+      }
+
+      .hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>TrailBase Counter</h1>
+
+      <!-- Login Section -->
+      <div id="login-section" class="auth-section">
+        <h2>Login</h2>
+        <div class="error" id="login-error"></div>
+        <input type="email" id="email" placeholder="Email" />
+        <input type="password" id="password" placeholder="Password" />
+        <button id="login-btn">Login</button>
+        <button id="signup-btn">Sign Up</button>
+        
+        <div class="oauth-buttons">
+          <button id="oauth-google-btn">Login with Google</button>
+          <button id="oauth-discord-btn">Login with Discord</button>
+        </div>
+      </div>
+
+      <!-- Counter Section -->
+      <div id="counter-section" class="counter-section hidden">
+        <div class="user-info">
+          <div>Logged in as: <strong id="user-email"></strong></div>
+          <button id="logout-btn" style="margin-top: 10px; background: #e53e3e;">Logout</button>
+        </div>
+        
+        <div class="counter-display" id="counter-value">0</div>
+        <button id="increment-btn" class="increment-btn">Increment Counter</button>
+        <div class="error" id="counter-error"></div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/app.ts"></script>
+  </body>
+</html>
