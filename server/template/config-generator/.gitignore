@@ -1,2 +1,4 @@
 /target/
 Cargo.lock
+/src/vault.rs
+/file_descriptor_set.bin

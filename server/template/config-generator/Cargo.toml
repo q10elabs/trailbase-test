@@ -7,4 +7,11 @@ edition = "2021"
 name = "config-generator"
 path = "src/main.rs"
 
+[build-dependencies]
+prost-build = "0.14"
+prost-reflect-build = "0.16"
+
 [dependencies]
+prost = "0.14"
+prost-reflect = { version = "0.16", features = ["text-format", "derive"] }
+lazy_static = "1.4"

@@ -1,26 +1,54 @@
 //! Config generator for TrailBase server configuration
 //!
-//! Reads a template config file and an authn file, then generates a customized
-//! config.textproto file with OAuth credentials filled in.
+//! Reads a template config file and an authn file, then generates:
+//! - A config.textproto file with <REDACTED> placeholders for secrets
+//! - A secrets.textproto vault file with the actual secret values
 
+use lazy_static::lazy_static;
+use prost_reflect::text_format::FormatOptions;
+use prost_reflect::{DescriptorPool, MessageDescriptor, ReflectMessage};
+use std::collections::HashMap;
 use std::env;
 use std::fs;
+use std::path::Path;
 use std::process;
+use std::sync::LazyLock;
+
+// Include generated protobuf code
+include!(concat!(env!("OUT_DIR"), "/config.rs"));
+
+// Load descriptor pool from generated file descriptor set
+static FILE_DESCRIPTOR_SET: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/file_descriptor_set.bin"));
+
+static DESCRIPTOR_POOL: LazyLock<DescriptorPool> = LazyLock::new(|| {
+    DescriptorPool::decode(FILE_DESCRIPTOR_SET)
+        .expect("Failed to load file descriptor set")
+});
+
+lazy_static! {
+    static ref VAULT_DESCRIPTOR: MessageDescriptor = DESCRIPTOR_POOL
+        .get_message_by_name("config.Vault")
+        .expect("Vault message descriptor not found");
+    static ref FORMAT_OPTIONS: FormatOptions = FormatOptions::new().pretty(true).expand_any(true);
+}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
     
-    if args.len() != 4 {
-        eprintln!("Usage: {} <template-file> <authn-file> <output-file>", args[0]);
+    if args.len() != 5 {
+        eprintln!("Usage: {} <template-file> <authn-file> <config-output> <vault-output>", args[0]);
         eprintln!("  template-file: Path to config.textproto.template");
         eprintln!("  authn-file: Path to .authn file with OAuth credentials");
-        eprintln!("  output-file: Path to write the generated config.textproto");
+        eprintln!("  config-output: Path to write the generated config.textproto");
+        eprintln!("  vault-output: Path to write the generated secrets.textproto");
         process::exit(1);
     }
     
     let template_path = &args[1];
     let authn_path = &args[2];
-    let output_path = &args[3];
+    let config_output_path = &args[3];
+    let vault_output_path = &args[4];
     
     // Read template file
     let template = match fs::read_to_string(template_path) {
@@ -42,18 +70,45 @@ fn main() {
     
     let (client_id, client_secret) = parse_authn_file(&authn_content);
     
-    // Replace placeholders in template
-    let config = template
-        .replace("{{GOOGLE_OAUTH_CLIENT_ID}}", &client_id)
-        .replace("{{GOOGLE_OAUTH_CLIENT_SECRET}}", &client_secret);
+    // Template already has <REDACTED> placeholders, so config is ready
+    // (No replacement needed - template uses <REDACTED> directly)
+    let config = template;
     
-    // Write output file
-    match fs::write(output_path, config) {
+    // Generate vault file with secrets
+    let vault_content = match generate_vault_file(&client_id, &client_secret) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("Error generating vault file: {}", e);
+            process::exit(1);
+        }
+    };
+    
+    // Ensure vault output directory exists
+    if let Some(vault_dir) = Path::new(vault_output_path).parent() {
+        if let Err(e) = fs::create_dir_all(vault_dir) {
+            eprintln!("Error creating vault directory '{}': {}", vault_dir.display(), e);
+            process::exit(1);
+        }
+    }
+    
+    // Write config file
+    match fs::write(config_output_path, config) {
         Ok(_) => {
-            eprintln!("Successfully generated config file: {}", output_path);
+            eprintln!("Successfully generated config file: {}", config_output_path);
         }
         Err(e) => {
-            eprintln!("Error writing output file '{}': {}", output_path, e);
+            eprintln!("Error writing config file '{}': {}", config_output_path, e);
+            process::exit(1);
+        }
+    }
+    
+    // Write vault file
+    match fs::write(vault_output_path, vault_content) {
+        Ok(_) => {
+            eprintln!("Successfully generated vault file: {}", vault_output_path);
+        }
+        Err(e) => {
+            eprintln!("Error writing vault file '{}': {}", vault_output_path, e);
             process::exit(1);
         }
     }
@@ -97,4 +152,30 @@ fn parse_authn_file(content: &str) -> (String, String) {
     });
     
     (client_id, client_secret)
+}
+
+/// Generate the vault textproto file with OAuth secrets using the same approach as TrailBase
+fn generate_vault_file(client_id: &str, client_secret: &str) -> Result<String, Box<dyn std::error::Error>> {
+    // Create a Vault message with the secrets
+    let mut vault = Vault {
+        secrets: HashMap::new(),
+    };
+    
+    vault.secrets.insert(
+        "TRAIL_AUTH_OAUTH_PROVIDERS_GOOGLE_CLIENT_ID".to_string(),
+        client_id.to_string(),
+    );
+    vault.secrets.insert(
+        "TRAIL_AUTH_OAUTH_PROVIDERS_GOOGLE_CLIENT_SECRET".to_string(),
+        client_secret.to_string(),
+    );
+    
+    // Serialize to textproto using the same approach as TrailBase
+    const PREFACE: &str = "# Auto-generated config.Vault textproto";
+    
+    let text: String = vault
+        .transcode_to_dynamic()
+        .to_text_format_with_options(&FORMAT_OPTIONS);
+    
+    Ok(format!("{PREFACE}\n{text}"))
 }

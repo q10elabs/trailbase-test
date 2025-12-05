@@ -8,7 +8,7 @@
 # 1. Removes the specified directory if it exists
 # 2. Creates a fresh directory
 # 3. Copies migrations from template
-# 4. Generates config.textproto from template using Rust config generator
+# 4. Generates config.textproto and secrets.textproto from template using Rust config generator
 # 5. Starts TrailBase server (which runs migrations and uses the generated config)
 
 set -e
@@ -82,11 +82,16 @@ else
     echo "Warning: No migrations found in template directory: $TEMPLATE_DIR/migrations"
 fi
 
-# Generate config file from template
+# Create secrets directory
+SECRETS_DIR="$DATA_DIR/secrets"
+mkdir -p "$SECRETS_DIR"
+
+# Generate config and vault files from template
 CONFIG_FILE="$DATA_DIR/config.textproto"
-echo "Generating config file from template..."
-if ! "$CONFIG_GENERATOR_BINARY" "$CONFIG_TEMPLATE" "$AUTHN_FILE" "$CONFIG_FILE"; then
-    echo "Error: Failed to generate config file"
+VAULT_FILE="$SECRETS_DIR/secrets.textproto"
+echo "Generating config and vault files from template..."
+if ! "$CONFIG_GENERATOR_BINARY" "$CONFIG_TEMPLATE" "$AUTHN_FILE" "$CONFIG_FILE" "$VAULT_FILE"; then
+    echo "Error: Failed to generate config and vault files"
     exit 1
 fi
 
@@ -106,7 +111,30 @@ if ! grep -q "record_apis:" "$CONFIG_FILE"; then
     exit 1
 fi
 
-echo "Config file generated successfully."
+# Verify config has <REDACTED> placeholders for secrets
+if ! grep -q '<REDACTED>' "$CONFIG_FILE"; then
+    echo "Error: <REDACTED> placeholders not found in generated config"
+    exit 1
+fi
+
+# Verify vault file was created
+if [ ! -f "$VAULT_FILE" ]; then
+    echo "Error: Vault file not found: $VAULT_FILE"
+    exit 1
+fi
+
+# Verify vault file contains secrets
+if ! grep -q "TRAIL_AUTH_OAUTH_PROVIDERS_GOOGLE_CLIENT_ID" "$VAULT_FILE"; then
+    echo "Error: OAuth client ID secret not found in vault file"
+    exit 1
+fi
+
+if ! grep -q "TRAIL_AUTH_OAUTH_PROVIDERS_GOOGLE_CLIENT_SECRET" "$VAULT_FILE"; then
+    echo "Error: OAuth client secret not found in vault file"
+    exit 1
+fi
+
+echo "Config and vault files generated successfully."
 
 echo ""
 echo "Starting TrailBase server..."

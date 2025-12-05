@@ -11,8 +11,8 @@ auth {
   oauth_providers: [{
     key: "google"
     value {
-      client_id: "{{GOOGLE_OAUTH_CLIENT_ID}}"
-      client_secret: "{{GOOGLE_OAUTH_CLIENT_SECRET}}"
+      client_id: "<REDACTED>"
+      client_secret: "<REDACTED>"
       provider_id: GOOGLE
     }
   }]
