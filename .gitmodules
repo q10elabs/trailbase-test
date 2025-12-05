@@ -1,0 +1,3 @@
+[submodule "trailbase"]
+	path = trailbase
+	url = https://github.com/trailbaseio/trailbase
