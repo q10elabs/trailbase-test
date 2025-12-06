@@ -27,17 +27,102 @@ const container = document.querySelector('.container') as HTMLElement;
 let client = initClient(TRAILBASE_URL);
 let subscriptionReader: ReadableStreamDefaultReader | null = null;
 let backgroundImageRecordId: number | null = null;
+let refreshIntervalId: number | null = null;
+
+// Token refresh interval: 5 minutes (300000 ms)
+// Auth tokens expire after 60 minutes, so refreshing every 5 minutes ensures
+// we refresh well before expiration (12 refreshes per token lifetime)
+const REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+
+// Token refresh and auth state management
+async function attemptTokenRefresh(): Promise<boolean> {
+  try {
+    const user = client.user();
+    if (!user) {
+      return false;
+    }
+
+    await client.refreshAuthToken();
+    
+    // Check if user is still authenticated after refresh
+    const userAfterRefresh = client.user();
+    if (!userAfterRefresh) {
+      // Refresh failed and user was logged out
+      return false;
+    }
+    
+    return true;
+  } catch (err) {
+    console.error('Token refresh failed:', err);
+    return false;
+  }
+}
+
+function startTokenRefreshInterval() {
+  // Clear any existing interval
+  stopTokenRefreshInterval();
+
+  // Set up periodic refresh
+  refreshIntervalId = window.setInterval(async () => {
+    const success = await attemptTokenRefresh();
+    if (!success) {
+      // Auth lost, redirect to login
+      stopTokenRefreshInterval();
+      showLoginSection();
+    }
+  }, REFRESH_INTERVAL_MS);
+}
+
+function stopTokenRefreshInterval() {
+  if (refreshIntervalId !== null) {
+    clearInterval(refreshIntervalId);
+    refreshIntervalId = null;
+  }
+}
+
+// Handle page visibility changes (sleep/wake scenarios)
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    // Page became visible - check auth status and refresh if needed
+    const user = client.user();
+    if (user) {
+      // Attempt to refresh token
+      attemptTokenRefresh().then((success) => {
+        if (!success) {
+          // Auth lost, redirect to login
+          stopTokenRefreshInterval();
+          showLoginSection();
+        }
+      });
+    } else {
+      // No user, ensure we're showing login
+      stopTokenRefreshInterval();
+      showLoginSection();
+    }
+  }
+}
 
 // Initialize: Check for existing session
 async function init() {
   try {
-    client = await initClientFromCookies(TRAILBASE_URL);
+    // Set up auth change callback to handle logout
+    client = await initClientFromCookies(TRAILBASE_URL, {
+      onAuthChange: (client, user) => {
+        if (!user) {
+          // User was logged out (e.g., refresh failed with 401)
+          stopTokenRefreshInterval();
+          showLoginSection();
+        }
+      },
+    });
+    
     const user = client.user();
     if (user) {
       showCounterSection(user.email);
       await loadCounter();
       await subscribeToCounter();
       await loadBackgroundImage();
+      startTokenRefreshInterval();
     } else {
       showLoginSection();
     }
@@ -45,6 +130,9 @@ async function init() {
     console.debug('No existing session:', err);
     showLoginSection();
   }
+
+  // Set up visibility change listener for sleep/wake detection
+  document.addEventListener('visibilitychange', handleVisibilityChange);
 }
 
 // Show/hide sections
@@ -95,6 +183,7 @@ async function handleLogin() {
       await loadCounter();
       await subscribeToCounter();
       await loadBackgroundImage();
+      startTokenRefreshInterval();
     }
   } catch (err: any) {
     showError(loginError, err.message || 'Login failed. Please check your credentials.');
@@ -155,6 +244,7 @@ async function handleSignup() {
 
 async function handleLogout() {
   try {
+    stopTokenRefreshInterval();
     if (subscriptionReader) {
       await subscriptionReader.cancel();
       subscriptionReader = null;
@@ -164,6 +254,7 @@ async function handleLogout() {
   } catch (err) {
     console.error('Logout error:', err);
     // Still show login section even if logout fails
+    stopTokenRefreshInterval();
     showLoginSection();
   }
 }
@@ -551,6 +642,9 @@ function checkOAuthCallback() {
       window.location.href = window.location.pathname;
       init();
     }, 1000);
+  } else {
+    // No OAuth callback, proceed with normal initialization
+    // (init() is called at the end of the file)
   }
 }
 
