@@ -28,6 +28,27 @@
         padding: 40px;
         max-width: 500px;
         width: 100%;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .container::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        z-index: 0;
+        opacity: 0.3;
+      }
+
+      .container > * {
+        position: relative;
+        z-index: 1;
       }
 
       h1 {
@@ -53,6 +74,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
       }
 
       button {
@@ -136,6 +158,35 @@
       .hidden {
         display: none;
       }
+
+      .image-upload-section {
+        margin-top: 20px;
+        padding: 15px;
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 6px;
+        border: 1px solid #ddd;
+      }
+
+      .image-upload-section label {
+        display: block;
+        margin-bottom: 10px;
+        font-weight: 500;
+        color: #333;
+      }
+
+      input[type="file"] {
+        padding: 8px;
+        margin-bottom: 10px;
+      }
+
+      .upload-image-btn {
+        background: #ed8936;
+        margin-top: 0;
+      }
+
+      .upload-image-btn:hover {
+        background: #dd6b20;
+      }
     </style>
   </head>
   <body>
@@ -166,6 +217,13 @@
         
         <div class="counter-display" id="counter-value">0</div>
         <button id="increment-btn" class="increment-btn">Increment Counter</button>
+        
+        <div class="image-upload-section">
+          <label for="background-image-input">Background Image (optional):</label>
+          <input type="file" id="background-image-input" accept="image/*" />
+          <button id="upload-image-btn" class="upload-image-btn">Upload Background Image</button>
+        </div>
+        
         <div class="error" id="counter-error"></div>
       </div>
     </div>
