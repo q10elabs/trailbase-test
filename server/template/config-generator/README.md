@@ -4,7 +4,11 @@ A small Rust program that generates TrailBase `config.textproto` files from a te
 
 ## Purpose
 
-Reads a template config file and an authn file, then generates a customized `config.textproto` with OAuth credentials filled in.
+Reads a template config file and an authn file, then generates:
+- A customized `config.textproto` with OAuth client ID inserted
+- A `secrets.textproto` vault file with the OAuth client secret
+
+Note: The OAuth client ID is stored in the main config file (not in the vault) because traildepot only supports loading secrets from the vault, not client IDs.
 
 ## Building
 
@@ -31,8 +35,8 @@ Example:
 ## Template Format
 
 The template file uses placeholders:
-- `{{GOOGLE_OAUTH_CLIENT_ID}}` - Replaced with client ID from authn file
-- `{{GOOGLE_OAUTH_CLIENT_SECRET}}` - Replaced with client secret from authn file
+- `client_id: "<REDACTED>"` - Replaced with actual client ID from authn file in the generated config
+- `client_secret: "<REDACTED>"` - Remains as `<REDACTED>` in config (actual secret is stored in vault file)
 
 ## Authn File Format
 

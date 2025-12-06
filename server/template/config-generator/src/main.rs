@@ -1,8 +1,8 @@
 //! Config generator for TrailBase server configuration
 //!
 //! Reads a template config file and an authn file, then generates:
-//! - A config.textproto file with <REDACTED> placeholders for secrets
-//! - A secrets.textproto vault file with the actual secret values
+//! - A config.textproto file with OAuth client ID inserted and <REDACTED> placeholder for client secret
+//! - A secrets.textproto vault file with the OAuth client secret (client ID is in config, not vault)
 
 use lazy_static::lazy_static;
 use prost_reflect::text_format::FormatOptions;
@@ -70,12 +70,12 @@ fn main() {
     
     let (client_id, client_secret) = parse_authn_file(&authn_content);
     
-    // Template already has <REDACTED> placeholders, so config is ready
-    // (No replacement needed - template uses <REDACTED> directly)
-    let config = template;
+    // Replace <REDACTED> placeholder for client_id with actual value
+    // Client secret remains <REDACTED> as it will be loaded from vault
+    let config = template.replace("client_id: \"<REDACTED>\"", &format!("client_id: \"{}\"", client_id));
     
-    // Generate vault file with secrets
-    let vault_content = match generate_vault_file(&client_id, &client_secret) {
+    // Generate vault file with client secret only (client ID is in config file, not vault)
+    let vault_content = match generate_vault_file(&client_secret) {
         Ok(content) => content,
         Err(e) => {
             eprintln!("Error generating vault file: {}", e);
@@ -154,17 +154,15 @@ fn parse_authn_file(content: &str) -> (String, String) {
     (client_id, client_secret)
 }
 
-/// Generate the vault textproto file with OAuth secrets using the same approach as TrailBase
-fn generate_vault_file(client_id: &str, client_secret: &str) -> Result<String, Box<dyn std::error::Error>> {
-    // Create a Vault message with the secrets
+/// Generate the vault textproto file with OAuth client secret
+/// Note: Client ID is stored in the main config file, not in the vault,
+/// because traildepot only supports loading secrets (not client IDs) from vault.
+fn generate_vault_file(client_secret: &str) -> Result<String, Box<dyn std::error::Error>> {
+    // Create a Vault message with the client secret only
     let mut vault = Vault {
         secrets: HashMap::new(),
     };
     
-    vault.secrets.insert(
-        "TRAIL_AUTH_OAUTH_PROVIDERS_GOOGLE_CLIENT_ID".to_string(),
-        client_id.to_string(),
-    );
     vault.secrets.insert(
         "TRAIL_AUTH_OAUTH_PROVIDERS_GOOGLE_CLIENT_SECRET".to_string(),
         client_secret.to_string(),

@@ -111,9 +111,20 @@ if ! grep -q "record_apis:" "$CONFIG_FILE"; then
     exit 1
 fi
 
-# Verify config has <REDACTED> placeholders for secrets
-if ! grep -q '<REDACTED>' "$CONFIG_FILE"; then
-    echo "Error: <REDACTED> placeholders not found in generated config"
+# Verify config has OAuth client ID (should be actual value, not <REDACTED>)
+if grep -q 'client_id: "<REDACTED>"' "$CONFIG_FILE"; then
+    echo "Error: OAuth client ID not properly set in config file (still has <REDACTED> placeholder)"
+    exit 1
+fi
+
+if ! grep -q 'client_id: "' "$CONFIG_FILE"; then
+    echo "Error: OAuth client ID not found in config file"
+    exit 1
+fi
+
+# Verify config has <REDACTED> placeholder for client secret (secret is in vault)
+if ! grep -q 'client_secret: "<REDACTED>"' "$CONFIG_FILE"; then
+    echo "Error: OAuth client secret placeholder not found in generated config"
     exit 1
 fi
 
@@ -123,14 +134,15 @@ if [ ! -f "$VAULT_FILE" ]; then
     exit 1
 fi
 
-# Verify vault file contains secrets
-if ! grep -q "TRAIL_AUTH_OAUTH_PROVIDERS_GOOGLE_CLIENT_ID" "$VAULT_FILE"; then
-    echo "Error: OAuth client ID secret not found in vault file"
+# Verify vault file contains client secret (client ID is in config, not vault)
+if ! grep -q "TRAIL_AUTH_OAUTH_PROVIDERS_GOOGLE_CLIENT_SECRET" "$VAULT_FILE"; then
+    echo "Error: OAuth client secret not found in vault file"
     exit 1
 fi
 
-if ! grep -q "TRAIL_AUTH_OAUTH_PROVIDERS_GOOGLE_CLIENT_SECRET" "$VAULT_FILE"; then
-    echo "Error: OAuth client secret not found in vault file"
+# Verify vault file does NOT contain client ID (it should be in config, not vault)
+if grep -q "TRAIL_AUTH_OAUTH_PROVIDERS_GOOGLE_CLIENT_ID" "$VAULT_FILE"; then
+    echo "Error: OAuth client ID should not be in vault file (it should be in config file)"
     exit 1
 fi
 
