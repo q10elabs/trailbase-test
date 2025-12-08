@@ -8,7 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "trailbase": "^0.8.0"
+    "trailbase": "file:../trailbase/crates/assets/js/client"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
