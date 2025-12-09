@@ -1,12 +1,13 @@
 // Authentication operations and token management
 // Handles login, signup, logout, OAuth, and token refresh
 
-import { initClientFromCookies } from 'trailbase';
+import { initClientFromCookies, initClient, type Tokens } from 'trailbase';
 import { client, setClient, setRefreshIntervalId, getRefreshIntervalId, getSubscriptionReader, setSubscriptionReader } from './state';
 import { TRAILBASE_URL, REFRESH_INTERVAL_MS } from './config';
 import { showLoginSection, showCounterSection, loginError, loginBtn, signupBtn, emailInput, passwordInput, showError, hideError } from './ui';
 import { loadCounter, subscribeToCounter } from './counter';
 import { loadBackgroundImage } from './backgroundImage';
+import { generatePkcePair, storePkceVerifier } from './pkce';
 
 // Token refresh and auth state management
 export async function attemptTokenRefresh(): Promise<boolean> {
@@ -178,9 +179,66 @@ export async function handleLogout() {
   }
 }
 
-export function handleOAuth(provider: string) {
-  // Redirect to TrailBase OAuth login
-  window.location.href = `${TRAILBASE_URL}/api/auth/v1/oauth/${provider}/login?redirect_uri=${encodeURIComponent(window.location.origin + window.location.pathname)}`;
+export async function handleOAuth(provider: string) {
+  try {
+    // Generate PKCE verifier and challenge
+    const { verifier, challenge } = await generatePkcePair();
+    
+    // Store verifier in sessionStorage for retrieval after redirect
+    // Only one OAuth flow can be active at a time, so we use a single storage key
+    storePkceVerifier(verifier);
+    
+    // Build OAuth login URL with PKCE parameters
+    const redirectUri = window.location.origin + window.location.pathname;
+    const params = new URLSearchParams({
+      redirect_uri: redirectUri,
+      response_type: 'code',
+      pkce_code_challenge: challenge,
+    });
+    
+    // Redirect to TrailBase OAuth login with PKCE
+    window.location.href = `${TRAILBASE_URL}/api/auth/v1/oauth/${provider}/login?${params.toString()}`;
+  } catch (err) {
+    console.error('Failed to initiate OAuth flow:', err);
+    showError(loginError, 'Failed to start OAuth login. Please try again.');
+  }
+}
+
+/**
+ * Exchange authorization code and PKCE verifier for authentication tokens.
+ * 
+ * @param authorizationCode - Authorization code received from OAuth callback
+ * @param pkceVerifier - PKCE code verifier that was used to generate the challenge
+ * @returns Promise resolving to tokens, or null if exchange failed
+ */
+export async function exchangeAuthCodeForTokens(
+  authorizationCode: string,
+  pkceVerifier: string
+): Promise<Tokens | null> {
+  try {
+    const response = await fetch(`${TRAILBASE_URL}/api/auth/v1/token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        authorization_code: authorizationCode,
+        pkce_code_verifier: pkceVerifier,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Token exchange failed:', response.status, errorText);
+      return null;
+    }
+
+    const tokens: Tokens = await response.json();
+    return tokens;
+  } catch (err) {
+    console.error('Error exchanging authorization code for tokens:', err);
+    return null;
+  }
 }
 
 // Initialize client from cookies
@@ -201,6 +259,30 @@ export async function initializeClient() {
     return newClient;
   } catch (err) {
     console.debug('No existing session:', err);
+    throw err;
+  }
+}
+
+/**
+ * Initialize client with tokens (used after PKCE token exchange).
+ */
+export async function initializeClientWithTokens(tokens: Tokens) {
+  try {
+    const newClient = initClient(TRAILBASE_URL, {
+      tokens,
+      onAuthChange: (_client, user) => {
+        if (!user) {
+          // User was logged out (e.g., refresh failed with 401)
+          stopTokenRefreshInterval();
+          showLoginSection();
+        }
+      },
+    });
+    
+    setClient(newClient);
+    return newClient;
+  } catch (err) {
+    console.error('Failed to initialize client with tokens:', err);
     throw err;
   }
 }
