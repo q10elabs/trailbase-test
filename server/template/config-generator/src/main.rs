@@ -1,8 +1,8 @@
 //! Config generator for TrailBase server configuration
 //!
 //! Reads a template config file and an authn file, then generates:
-//! - A config.textproto file with OAuth client ID inserted and <REDACTED> placeholder for client secret
-//! - A secrets.textproto vault file with the OAuth client secret (client ID is in config, not vault)
+//! - A config.textproto file with OAuth client ID and email configuration inserted, with <REDACTED> placeholders for secrets
+//! - A secrets.textproto vault file with OAuth client secret and email password (client ID and email non-secrets are in config, not vault)
 
 use lazy_static::lazy_static;
 use prost_reflect::text_format::FormatOptions;
@@ -39,7 +39,7 @@ fn main() {
     if args.len() != 5 {
         eprintln!("Usage: {} <template-file> <authn-file> <config-output> <vault-output>", args[0]);
         eprintln!("  template-file: Path to config.textproto.template");
-        eprintln!("  authn-file: Path to .authn file with OAuth credentials");
+        eprintln!("  authn-file: Path to .authn file with OAuth credentials and email configuration");
         eprintln!("  config-output: Path to write the generated config.textproto");
         eprintln!("  vault-output: Path to write the generated secrets.textproto");
         process::exit(1);
@@ -59,7 +59,7 @@ fn main() {
         }
     };
     
-    // Read authn file and parse OAuth credentials
+    // Read authn file and parse OAuth credentials and email configuration
     let authn_content = match fs::read_to_string(authn_path) {
         Ok(content) => content,
         Err(e) => {
@@ -68,14 +68,26 @@ fn main() {
         }
     };
     
-    let (client_id, client_secret) = parse_authn_file(&authn_content);
+    let authn_data = parse_authn_file(&authn_content);
     
     // Replace <REDACTED> placeholder for client_id with actual value
     // Client secret remains <REDACTED> as it will be loaded from vault
-    let config = template.replace("client_id: \"<REDACTED>\"", &format!("client_id: \"{}\"", client_id));
+    let mut config = template.replace("client_id: \"<REDACTED>\"", &format!("client_id: \"{}\"", authn_data.client_id));
     
-    // Generate vault file with client secret only (client ID is in config file, not vault)
-    let vault_content = match generate_vault_file(&client_secret) {
+    // Replace empty email {} section with populated email configuration
+    // Email password remains <REDACTED> as it will be loaded from vault
+    let email_section = format!(
+        "email {{\n  smtp_host: \"{}\"\n  smtp_port: {}\n  smtp_username: \"{}\"\n  smtp_password: \"<REDACTED>\"\n  sender_name: \"{}\"\n  sender_address: \"{}\"\n}}",
+        authn_data.email_smtp_host,
+        authn_data.email_smtp_port,
+        authn_data.email_smtp_username,
+        authn_data.email_sender_name,
+        authn_data.email_sender_address
+    );
+    config = config.replace("email {}", &email_section);
+    
+    // Generate vault file with client secret and email password (client ID and email non-secrets are in config file, not vault)
+    let vault_content = match generate_vault_file(&authn_data.client_secret, &authn_data.email_smtp_password) {
         Ok(content) => content,
         Err(e) => {
             eprintln!("Error generating vault file: {}", e);
@@ -114,10 +126,28 @@ fn main() {
     }
 }
 
-/// Parse the .authn file and extract Google OAuth credentials
-fn parse_authn_file(content: &str) -> (String, String) {
+/// Structure to hold all parsed authentication and email configuration
+struct AuthnData {
+    client_id: String,
+    client_secret: String,
+    email_smtp_host: String,
+    email_smtp_port: u16,
+    email_smtp_username: String,
+    email_smtp_password: String,
+    email_sender_name: String,
+    email_sender_address: String,
+}
+
+/// Parse the .authn file and extract Google OAuth credentials and email configuration
+fn parse_authn_file(content: &str) -> AuthnData {
     let mut client_id = None;
     let mut client_secret = None;
+    let mut email_smtp_host = None;
+    let mut email_smtp_port = None;
+    let mut email_smtp_username = None;
+    let mut email_smtp_password = None;
+    let mut email_sender_name = None;
+    let mut email_sender_address = None;
     
     for line in content.lines() {
         let line = line.trim();
@@ -136,29 +166,73 @@ fn parse_authn_file(content: &str) -> (String, String) {
                 "GOOGLE_OAUTH_CLIENT_SECRET" => {
                     client_secret = Some(value.to_string());
                 }
+                "EMAIL_SMTP_HOST" => {
+                    email_smtp_host = Some(value.to_string());
+                }
+                "EMAIL_SMTP_PORT" => {
+                    email_smtp_port = Some(value.parse::<u16>().unwrap_or_else(|_| {
+                        eprintln!("Error: EMAIL_SMTP_PORT must be a valid number");
+                        process::exit(1);
+                    }));
+                }
+                "EMAIL_SMTP_USERNAME" => {
+                    email_smtp_username = Some(value.to_string());
+                }
+                "EMAIL_SMTP_PASSWORD" => {
+                    email_smtp_password = Some(value.to_string());
+                }
+                "EMAIL_SENDER_NAME" => {
+                    email_sender_name = Some(value.to_string());
+                }
+                "EMAIL_SENDER_ADDRESS" => {
+                    email_sender_address = Some(value.to_string());
+                }
                 _ => {}
             }
         }
     }
     
-    let client_id = client_id.unwrap_or_else(|| {
-        eprintln!("Error: GOOGLE_OAUTH_CLIENT_ID not found in authn file");
-        process::exit(1);
-    });
-    
-    let client_secret = client_secret.unwrap_or_else(|| {
-        eprintln!("Error: GOOGLE_OAUTH_CLIENT_SECRET not found in authn file");
-        process::exit(1);
-    });
-    
-    (client_id, client_secret)
+    AuthnData {
+        client_id: client_id.unwrap_or_else(|| {
+            eprintln!("Error: GOOGLE_OAUTH_CLIENT_ID not found in authn file");
+            process::exit(1);
+        }),
+        client_secret: client_secret.unwrap_or_else(|| {
+            eprintln!("Error: GOOGLE_OAUTH_CLIENT_SECRET not found in authn file");
+            process::exit(1);
+        }),
+        email_smtp_host: email_smtp_host.unwrap_or_else(|| {
+            eprintln!("Error: EMAIL_SMTP_HOST not found in authn file");
+            process::exit(1);
+        }),
+        email_smtp_port: email_smtp_port.unwrap_or_else(|| {
+            eprintln!("Error: EMAIL_SMTP_PORT not found in authn file");
+            process::exit(1);
+        }),
+        email_smtp_username: email_smtp_username.unwrap_or_else(|| {
+            eprintln!("Error: EMAIL_SMTP_USERNAME not found in authn file");
+            process::exit(1);
+        }),
+        email_smtp_password: email_smtp_password.unwrap_or_else(|| {
+            eprintln!("Error: EMAIL_SMTP_PASSWORD not found in authn file");
+            process::exit(1);
+        }),
+        email_sender_name: email_sender_name.unwrap_or_else(|| {
+            eprintln!("Error: EMAIL_SENDER_NAME not found in authn file");
+            process::exit(1);
+        }),
+        email_sender_address: email_sender_address.unwrap_or_else(|| {
+            eprintln!("Error: EMAIL_SENDER_ADDRESS not found in authn file");
+            process::exit(1);
+        }),
+    }
 }
 
-/// Generate the vault textproto file with OAuth client secret
-/// Note: Client ID is stored in the main config file, not in the vault,
-/// because traildepot only supports loading secrets (not client IDs) from vault.
-fn generate_vault_file(client_secret: &str) -> Result<String, Box<dyn std::error::Error>> {
-    // Create a Vault message with the client secret only
+/// Generate the vault textproto file with OAuth client secret and email password
+/// Note: Client ID and email non-secrets are stored in the main config file, not in the vault,
+/// because traildepot only supports loading secrets (not client IDs or email non-secrets) from vault.
+fn generate_vault_file(client_secret: &str, email_password: &str) -> Result<String, Box<dyn std::error::Error>> {
+    // Create a Vault message with the client secret and email password
     let mut vault = Vault {
         secrets: HashMap::new(),
     };
@@ -166,6 +240,11 @@ fn generate_vault_file(client_secret: &str) -> Result<String, Box<dyn std::error
     vault.secrets.insert(
         "TRAIL_AUTH_OAUTH_PROVIDERS_GOOGLE_CLIENT_SECRET".to_string(),
         client_secret.to_string(),
+    );
+    
+    vault.secrets.insert(
+        "TRAIL_EMAIL_SMTP_PASSWORD".to_string(),
+        email_password.to_string(),
     );
     
     // Serialize to textproto using the same approach as TrailBase
