@@ -1,27 +1,35 @@
-# TrailBase Counter Experiment
+# TrailBase Test Repository
 
-A simple CRUD application demonstrating TrailBase's capabilities: authentication, Record APIs, and realtime subscriptions.
+A test and demonstration repository for setting up and using TrailBase servers for local development and testing. This repository demonstrates TrailBase's capabilities through practical examples and provides infrastructure for multi-server testing scenarios.
 
-## Overview
+## Purpose
 
-This experiment implements a counter application where:
-- Each logged-in user has their own counter
-- Users can increment their counter via a button
-- Counter updates are synchronized in realtime across sessions
-- Custom login form with OAuth support
+This repository serves as:
+- **Demonstration**: Example TrailBase setup with authentication, Record APIs, and realtime subscriptions
+- **Testing Infrastructure**: Tools and patterns for running multiple isolated TrailBase servers in parallel
+- **Development Reference**: Working examples of server configuration, migrations, and client integration
 
 ## Project Structure
 
 ```
 .
-├── server/          # TrailBase server deployment
-│   ├── traildepot/  # TrailBase runtime data (auto-generated)
-│   └── run.sh       # Script to start the server
-├── client/          # Web client application
-│   ├── src/         # TypeScript source code
-│   └── index.html   # Main HTML page
-└── trailbase/       # TrailBase source code (submodule)
+├── server/          # TrailBase server deployment and configuration
+│   ├── template/    # Reproducible server configuration templates
+│   └── run.sh       # Server management scripts
+├── client/          # Example web client application
+│   └── src/         # TypeScript source code
+├── test/            # Test utilities and scripts
+├── trailbase/       # TrailBase source code (git submodule)
+└── changelog/       # Development history and decisions
 ```
+
+## Counter Experiment Demo
+
+The included counter application demonstrates:
+- Per-user data isolation with Record APIs
+- Authentication (email/password and OAuth)
+- Realtime subscriptions for live updates
+- Custom client implementation with TypeScript
 
 ## Quick Start
 
@@ -63,20 +71,33 @@ npm run dev
 
 Open http://localhost:5173 in your browser.
 
-## Features
+**Counter app features:**
+- Custom login form (email/password)
+- User registration
+- OAuth login (Google, Discord)
+- Per-user counter with server-side increment
+- Realtime updates via subscriptions
 
-- ✅ Custom login form (email/password)
-- ✅ User registration
-- ✅ OAuth login (Google, Discord) - redirects to TrailBase OAuth flow
-- ✅ Per-user counter display
-- ✅ Server-side counter increment
-- ✅ Realtime counter updates via subscriptions
+## Testing Strategies
 
-## Documentation
+This repository supports running multiple isolated TrailBase servers for parallel testing:
 
-- [Server Setup](./server/README.md) - Server configuration and setup
-- [Server Configuration](./server/CONFIGURATION.md) - Record API configuration guide
-- [Client Setup](./client/README.md) - Client application setup
+- **Development**: One long-running server with real OAuth (port 7000)
+- **Testing**: Ephemeral servers with programmatic authentication (ports 7001+)
+- **Isolation**: Each test suite gets its own data directory and port
+
+**Key benefits:**
+- No OAuth redirect URL limits
+- Parallel test execution
+- Fast, reliable tests without external dependencies
+- Matches industry patterns (Supabase, PocketBase)
+
+See [MULTI_SERVER_TESTING.md](./MULTI_SERVER_TESTING.md) for complete testing architecture, implementation examples, and migration guide.
+
+**Test utilities:**
+- Python authentication test script: `test/test_auth.py`
+- Server lifecycle management patterns
+- Programmatic user creation and authentication helpers
 
 ## Development
 
@@ -92,22 +113,44 @@ Open http://localhost:5173 in your browser.
 
 ## Troubleshooting
 
-### Record API not working
-Make sure you've configured the Record API in the admin dashboard. See [CONFIGURATION.md](./server/CONFIGURATION.md).
+### Server Issues
+- **Server won't start**: Ensure TrailBase binary is built (`cd trailbase && make static`)
+- **Port already in use**: Check for existing processes (`lsof -i :7000`) or use a different port
+- **Config errors**: Verify `config.textproto` syntax and OAuth credentials in `.authn` file
 
-### Authentication issues
-- Check that the TrailBase server is running
-- Verify OAuth providers are configured (if using OAuth)
-- Check browser console for error messages
+### Record API Issues
+- **API not working**: Configure Record API in admin dashboard after first server start
+- **Access denied**: Verify access control rules match your use case
+- See [server/CONFIGURATION.md](./server/CONFIGURATION.md) for detailed setup
 
-### Counter not updating
-- Verify Record API is configured correctly
-- Check browser console for subscription errors
-- Ensure you're logged in
+### Authentication Issues
+- **OAuth redirect errors**: Ensure `site_url` matches server port and OAuth redirect URL is registered
+- **Login fails**: Check server logs, verify user exists, ensure email is verified
+- **Token refresh issues**: Check token expiration and refresh token validity
 
-## Next Steps
+### Client Issues
+- **API calls fail**: Verify server is running and Vite proxy is configured correctly
+- **Realtime not working**: Check subscription setup and network connectivity
+- **Counter not updating**: Verify Record API configuration and user authentication
 
-- Explore TrailBase's admin dashboard
-- Try the realtime features by opening multiple browser tabs
-- Experiment with different access control rules
-- Check out the TrailBase documentation: https://trailbase.io
+### Testing Issues
+- **Multiple servers conflict**: Use different ports and data directories for each server
+- **Test user creation fails**: Ensure admin user exists and Admin API is accessible
+- **Port conflicts in CI**: Use random port allocation or sequential port assignment
+
+## Documentation
+
+### Setup & Configuration
+- [Server Setup](./server/README.md) - Server deployment and management
+- [Server Configuration](./server/CONFIGURATION.md) - Record API configuration guide
+- [Client Setup](./client/README.md) - Client application setup
+- [Google OAuth Setup](./server/GOOGLE_OAUTH_SETUP.md) - OAuth provider configuration
+
+### Testing & Development
+- [Multi-Server Testing](./MULTI_SERVER_TESTING.md) - Testing architecture and patterns
+- [Test Utilities](./test/README.md) - Authentication testing tools
+- [Changelog](./changelog/) - Development history and decisions
+
+### Reference
+- [TrailBase Documentation](https://trailbase.io) - Official TrailBase docs
+- [AGENTS.md](./AGENTS.md) - Repository rules and development guidelines
